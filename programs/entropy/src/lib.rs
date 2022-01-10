@@ -4,7 +4,8 @@ use {
         solana_program::{
             hash::hash,
             program::invoke,
-            system_instruction::transfer
+            system_instruction::transfer,
+            sysvar
         }
     },
     vdf::{
@@ -38,14 +39,13 @@ pub struct Initialize<'info> {
     /// Account the challenge is stored at
     #[account(init, payer = payer, space = 8 + 32 + 8 + 8 + 32)]
     pub challenge: Account<'info, Challenge>,
-    /// Account that will fund the challenge and pay for the reward
+    /// Account that will fund the account and pay for the reward
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// System program
+    /// System program for transferring lamports
     pub system_program: Program<'info, System>,
-    /// Recent blockhashes sysvar (deprecated in 1.9, but see https://github.com/solana-labs/solana/issues/22150)
-    #[allow(deprecated)]
-    pub recent_blockhashes: Sysvar<'info, RecentBlockhashes>,
+    /// SlotHashes sysvar for seeding the VDF
+    pub slot_hashes: UncheckedAccount<'info>,
 }
 
 /// Instruction to provide a proof for a solved challenge
@@ -67,7 +67,10 @@ pub mod entropy {
         let challenge = &mut ctx.accounts.challenge;
         let payer = &mut ctx.accounts.payer;
         let system_program = &ctx.accounts.system_program;
-        let recent_blockhashes = &ctx.accounts.recent_blockhashes;
+        let slot_hashes = &ctx.accounts.slot_hashes;
+        if *slot_hashes.key != sysvar::slot_hashes::id() {
+            return Err(ProgramError::UnsupportedSysvar);  // TODO: customize error
+        }
 
         // Transfer lamports from the payer to the challenge account to incentivize solving it
         if reward != 0 {
@@ -85,15 +88,12 @@ pub mod entropy {
             )?;
         }
 
-        // Use a hash of the most recent blockhash as the seed for the VDF
-        #[allow(deprecated)]
-        let most_recent_blockhash = recent_blockhashes
-            .first()
-            .ok_or(ProgramError::UnsupportedSysvar)?  // TODO: customize error
-            .blockhash;
+        // The first 16 bytes are the number of slot hashes and the most recent slot number
+        // The next 32 bytes are the most recent slot hash
+        let most_recent_slot_hash = &slot_hashes.try_borrow_data()?[16..16 + 32];
 
-        // Initialize the challenge account
-        challenge.hash = hash(most_recent_blockhash.to_bytes().as_ref()).to_bytes();
+        // Initialize the challenge account with a hash of this slot hash as the seed for the VDF
+        challenge.hash = hash(most_recent_slot_hash).to_bytes();
         challenge.difficulty = difficulty;
         challenge.reward = reward;
         challenge.entropy = [0; 32];

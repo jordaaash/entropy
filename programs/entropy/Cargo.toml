@@ -17,3 +17,5 @@ default = []
 
 [dependencies]
 anchor-lang = "0.20.0"
+borsh = { version = "0.9.1", features = ["const-generics"] }
+vdf = "0.1.0"

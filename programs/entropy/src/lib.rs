@@ -36,7 +36,7 @@ pub struct Challenge {
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     /// Account the challenge is stored at
-    #[account(init, payer = payer, space = 8 + 32 + 8 + 32)]
+    #[account(init, payer = payer, space = 8 + 32 + 8 + 8 + 32)]
     pub challenge: Account<'info, Challenge>,
     /// Account that will fund the challenge and pay for the reward
     #[account(mut)]

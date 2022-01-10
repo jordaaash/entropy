@@ -89,7 +89,7 @@ pub mod entropy {
         #[allow(deprecated)]
         let most_recent_blockhash = recent_blockhashes
             .first()
-            .ok_or(ProgramError::UnsupportedSysvar)?
+            .ok_or(ProgramError::UnsupportedSysvar)?  // TODO: customize error
             .blockhash;
 
         // Initialize the challenge account
@@ -133,7 +133,7 @@ pub mod entropy {
             challenge.hash.as_ref(),
             challenge.difficulty,
             proof.as_ref(),
-        ).map_err(|_| ProgramError::InvalidArgument)?;
+        ).map_err(|_| ProgramError::InvalidArgument)?; // TODO: customize error
 
         // Hash the proof bytes to produce entropy
         challenge.entropy = hash(proof.as_ref()).to_bytes();

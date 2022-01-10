@@ -19,6 +19,46 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 const INT_SIZE_BITS: u16 = 2048;
 const PROOF_SIZE_BYTES: usize = ((2048 + 16) >> 4) * 4; // 516 bytes
 
+/// A challenge to produce entropy with a verifiable delay function (VDF) in exchange for a reward
+#[account]
+pub struct Challenge {
+    /// SHA-256 hash of the most recent blockhash when the challenge is initialized
+    pub hash: [u8; 32],
+    /// Number of iterations that the VDF must be run to solve the challenge
+    pub difficulty: u64,
+    /// Lamports that the VDF solver will be rewarded for providing the proof
+    pub reward: u64,
+    /// SHA-256 hash of the valid VDF proof to be used as a source of entropy
+    pub entropy: [u8; 32],
+}
+
+/// Instruction to initialize a new challenge
+#[derive(Accounts)]
+pub struct Initialize<'info> {
+    /// Account the challenge is stored at
+    #[account(init, payer = payer, space = 8 + 32 + 8 + 32)]
+    pub challenge: Account<'info, Challenge>,
+    /// Account that will fund the challenge and pay for the reward
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    /// System program
+    pub system_program: Program<'info, System>,
+    /// Recent blockhashes sysvar (deprecated in 1.9, but see https://github.com/solana-labs/solana/issues/22150)
+    #[allow(deprecated)]
+    pub recent_blockhashes: Sysvar<'info, RecentBlockhashes>,
+}
+
+/// Instruction to provide a proof for a solved challenge
+#[derive(Accounts)]
+pub struct Prove<'info> {
+    /// Account the challenge is stored at
+    #[account(mut)]
+    pub challenge: Account<'info, Challenge>,
+    /// Account that will receive the reward for solving the challenge
+    #[account(mut)]
+    pub prover: UncheckedAccount<'info>,
+}
+
 #[program]
 pub mod entropy {
     use super::*;
@@ -29,6 +69,7 @@ pub mod entropy {
         let system_program = &ctx.accounts.system_program;
         let recent_blockhashes = &ctx.accounts.recent_blockhashes;
 
+        // Transfer lamports from the payer to the challenge account to incentivize solving it
         if reward != 0 {
             invoke(
                 &transfer(
@@ -44,16 +85,18 @@ pub mod entropy {
             )?;
         }
 
+        // Use a hash of the most recent blockhash as the seed for the VDF
         #[allow(deprecated)]
         let most_recent_blockhash = recent_blockhashes
             .first()
             .ok_or(ProgramError::UnsupportedSysvar)?
             .blockhash;
 
+        // Initialize the challenge account
         challenge.hash = hash(most_recent_blockhash.to_bytes().as_ref()).to_bytes();
         challenge.difficulty = difficulty;
         challenge.reward = reward;
-        challenge.outcome = [0; 32];
+        challenge.entropy = [0; 32];
 
         Ok(())
     }
@@ -62,10 +105,12 @@ pub mod entropy {
         let challenge = &mut ctx.accounts.challenge;
         let prover = &mut ctx.accounts.prover;
 
-        if challenge.outcome != [0; 32] {
+        // Error if the challenge has already been solved
+        if challenge.entropy != [0; 32] {
             return Err(ProgramError::InvalidAccountData); // TODO: customize error
         }
 
+        // Verify the proof
         /*
         FIXME:
         Compiling classgroup v0.1.0
@@ -90,8 +135,10 @@ pub mod entropy {
             proof.as_ref(),
         ).map_err(|_| ProgramError::InvalidArgument)?;
 
-        challenge.outcome = hash(proof.as_ref()).to_bytes();
+        // Hash the proof bytes to produce entropy
+        challenge.entropy = hash(proof.as_ref()).to_bytes();
 
+        // Transfer lamports from the challenge account to the prover
         let reward = challenge.reward;
         if reward != 0 {
             challenge.reward = 0;
@@ -109,31 +156,4 @@ pub mod entropy {
 
         Ok(())
     }
-}
-
-#[account]
-pub struct Challenge {
-    pub hash: [u8; 32],
-    pub difficulty: u64,
-    pub reward: u64,
-    pub outcome: [u8; 32],
-}
-
-#[derive(Accounts)]
-pub struct Initialize<'info> {
-    #[account(init, payer = payer, space = 8 + 32 + 8 + 32)]
-    pub challenge: Account<'info, Challenge>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub system_program: Program<'info, System>,
-    #[allow(deprecated)]
-    pub recent_blockhashes: Sysvar<'info, RecentBlockhashes>,
-}
-
-#[derive(Accounts)]
-pub struct Prove<'info> {
-    #[account(mut)]
-    pub challenge: Account<'info, Challenge>,
-    #[account(mut)]
-    pub prover: UncheckedAccount<'info>,
 }

@@ -14,8 +14,22 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
+test-bpf = []
 
 [dependencies]
-anchor-lang = "0.20.0"
+#accumulator = { git = "https://github.com/cambrian/accumulator.git", tag = "v0.2.0" }
+#accumulators = { git = "https://github.com/dignifiedquire/rust-accumulators.git" }
+anchor-lang = "0.20.1"
 borsh = { version = "0.9.1", features = ["const-generics"] }
-vdf = "0.1.0"
+#class_group = "0.6.0"
+#classygroup = "0.0.5"
+num-bigint-dig = { git = "https://github.com/jordansexton/num-bigint.git", branch = "bpf-target", features = ["prime"] }
+#num-traits = "0.2.14"
+#ramp = "0.6.0"
+#rsa-vdf = "0.0.1"
+#vdf = "0.1.0"
+
+[dev-dependencies]
+anchor-client = { version = "0.20.1", features = ["debug"] }
+getrandom = { version = "0.2", features = ["custom"] }
+solana-program-test = "1.9.4"

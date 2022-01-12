@@ -23,11 +23,15 @@ anchor-lang = "0.20.1"
 borsh = { version = "0.9.1", features = ["const-generics"] }
 #class_group = "0.6.0"
 #classygroup = "0.0.5"
-num-bigint-dig = { git = "https://github.com/jordansexton/num-bigint.git", branch = "bpf-target", features = ["prime"] }
 #num-traits = "0.2.14"
 #ramp = "0.6.0"
 #rsa-vdf = "0.0.1"
 #vdf = "0.1.0"
+
+[dependencies.num-bigint-dig]
+git = "https://github.com/jordansexton/num-bigint.git"
+branch = "bpf-target"
+features = ["prime"]
 
 [dev-dependencies]
 anchor-client = { version = "0.20.1", features = ["debug"] }

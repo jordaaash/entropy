@@ -1,18 +1,14 @@
 use {
     anchor_lang::{
         prelude::*,
-        solana_program::{
-            hash::hash,
-            program::invoke,
-            system_instruction::transfer,
-            sysvar
-        }
+        solana_program::{hash::hash, program::invoke, system_instruction::transfer, sysvar},
     },
-    vdf::{
-        VDF,
-        VDFParams,
-        WesolowskiVDFParams
-    }
+    num_bigint_dig::{prime::probably_prime_miller_rabin, BigUint},
+    // vdf::{
+    //     VDF,
+    //     VDFParams,
+    //     WesolowskiVDFParams
+    // },
 };
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -59,9 +55,28 @@ pub struct Prove<'info> {
     pub prover: UncheckedAccount<'info>,
 }
 
+/// Instruction to provide a proof for a solved challenge
+#[derive(Accounts)]
+pub struct Prime {}
+
 #[program]
 pub mod entropy {
     use super::*;
+
+    pub fn prime(ctx: Context<Prime>) -> ProgramResult {
+        // 256-bit prime
+        let big_uint =
+            "66879465661348111229871989287968040993513351195484998191057052014006844134449"
+                .parse::<BigUint>()
+                .unwrap();
+
+        msg!(
+            "probably_prime_miller_rabin: {}",
+            probably_prime_miller_rabin(&big_uint, 1, true)
+        );
+
+        Ok(())
+    }
 
     pub fn initialize(ctx: Context<Initialize>, difficulty: u64, reward: u64) -> ProgramResult {
         let challenge = &mut ctx.accounts.challenge;
@@ -69,17 +84,13 @@ pub mod entropy {
         let system_program = &ctx.accounts.system_program;
         let slot_hashes = &ctx.accounts.slot_hashes;
         if *slot_hashes.key != sysvar::slot_hashes::id() {
-            return Err(ProgramError::UnsupportedSysvar);  // TODO: customize error
+            return Err(ProgramError::UnsupportedSysvar); // TODO: customize error
         }
 
         // Transfer lamports from the payer to the challenge account to incentivize solving it
         if reward != 0 {
             invoke(
-                &transfer(
-                    payer.key,
-                    &challenge.key(),
-                    reward,
-                ),
+                &transfer(payer.key, &challenge.key(), reward),
                 &[
                     payer.to_account_info(),
                     challenge.to_account_info(),
@@ -101,7 +112,8 @@ pub mod entropy {
         Ok(())
     }
 
-    pub fn prove(ctx: Context<Prove>, proof: [u8; PROOF_SIZE_BYTES]) -> ProgramResult {
+    // TODO: replace length of 516 with PROOF_SIZE_BYTES when Anchor supports
+    pub fn prove(ctx: Context<Prove>, proof: [u8; 516]) -> ProgramResult {
         let challenge = &mut ctx.accounts.challenge;
         let prover = &mut ctx.accounts.prover;
 
@@ -128,12 +140,12 @@ pub mod entropy {
           |            |       no `c_int` in the root
           |            no `c_char` in the root
          */
-        let vdf = WesolowskiVDFParams(INT_SIZE_BITS).new();
-        vdf.verify(
-            challenge.hash.as_ref(),
-            challenge.difficulty,
-            proof.as_ref(),
-        ).map_err(|_| ProgramError::InvalidArgument)?; // TODO: customize error
+        // let vdf = WesolowskiVDFParams(INT_SIZE_BITS).new();
+        // vdf.verify(
+        //     challenge.hash.as_ref(),
+        //     challenge.difficulty,
+        //     proof.as_ref(),
+        // ).map_err(|_| ProgramError::InvalidArgument)?; // TODO: customize error
 
         // Hash the proof bytes to produce entropy
         challenge.entropy = hash(proof.as_ref()).to_bytes();
@@ -143,7 +155,8 @@ pub mod entropy {
         if reward != 0 {
             challenge.reward = 0;
 
-            **challenge.to_account_info().try_borrow_mut_lamports()? = challenge.to_account_info()
+            **challenge.to_account_info().try_borrow_mut_lamports()? = challenge
+                .to_account_info()
                 .lamports()
                 .checked_sub(reward)
                 .ok_or(ProgramError::InsufficientFunds)?; // TODO: customize error

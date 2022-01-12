@@ -72,7 +72,7 @@ pub mod entropy {
 
         msg!(
             "probably_prime_miller_rabin: {}",
-            probably_prime_miller_rabin(&big_uint, 24, true)
+            probably_prime_miller_rabin(&big_uint, 40, true)
         );
 
         Ok(())
